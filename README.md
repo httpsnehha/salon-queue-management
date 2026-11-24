@@ -1,5 +1,11 @@
 # Salon Queue Management System
 
+**Live Website:** https://salon-queue-management-lime.vercel.app
+
+**GitHub Repository:** https://github.com/httpsnehha/salon-queue-management
+
+# Salon Queue Management System
+
 A responsive salon queue application built with React, Vite, TypeScript, Tailwind CSS v4, Express, SQLite, and Socket.IO.
 
 ## Requirements

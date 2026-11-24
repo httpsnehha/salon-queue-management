@@ -134,3 +134,88 @@ Implement the Customer Home and Services screen at `/`.
 4. Tell me how to test the homepage and its buttons.
 5. Report any errors or incomplete features honestly.
 
+# Prompt 4 — Customer Queue Registration
+
+Read AGENTS.md and all three documents inside docs/ before making changes. Also inspect the existing frontend and backend code.
+
+Implement the Customer Queue Registration feature.
+
+## 1. Join Queue page
+
+Complete the existing `/join` page.
+
+Add a registration form containing:
+- Customer name
+- Phone number
+- Service selection
+- Selected service price and estimated duration
+
+Add a Register / Join Queue button.
+
+## 2. Form validation
+
+- All fields must be required.
+- Validate the customer's name.
+- Validate the phone number.
+- Require a valid service selection.
+- Display understandable validation messages.
+- Prevent duplicate submissions while a request is processing.
+
+## 3. Backend and SQLite
+
+Implement the required backend API and database operations.
+
+- Save customer queue registrations in SQLite.
+- Store customer name, phone number, service information, token number, date, status, and registration time.
+- Use the existing database setup where possible.
+- Preserve the selected service's name, price, and duration in the queue record.
+
+## 4. Daily token generation
+
+Follow the rules in docs/03-flows-rules.md:
+
+- Tokens start at #001 each calendar day.
+- Tokens increase sequentially.
+- Cancelled tokens must not be reused.
+- Failed registrations must not consume tokens.
+- Handle simultaneous registrations safely using database transactions.
+
+## 5. Registration confirmation
+
+After successful registration, show:
+- Customer name
+- Selected service
+- Token number
+- Registration confirmation message
+- Link to the customer's queue status page
+
+## 6. Customer Queue Status page
+
+Connect the existing `/queue/:id` page so that a customer can view their actual registration details.
+
+Do not invent queue status transitions or additional business rules.
+
+## 7. Testing
+
+Test:
+- Successful registration
+- Missing required fields
+- Invalid phone number
+- Invalid service selection
+- Sequential token generation
+- Failed registration not consuming a token
+- Data persistence after restarting the backend
+
+## Important instructions
+
+- Use the existing React, Vite, TypeScript, Tailwind v4, Express, SQLite, and Socket.IO stack.
+- Keep the existing homepage design and navigation working.
+- Do not add payment features or unrelated functionality.
+- Do not replace the database technology.
+- Do not hardcode customer registrations.
+- Do not expose sensitive information.
+- Keep the code beginner-friendly.
+
+Before making changes, show your implementation plan and the files you intend to modify. Wait for approval.
+
+After implementation, explain all changes and provide exact PowerShell commands to run and test the feature. Report any tests you could not perform honestly.

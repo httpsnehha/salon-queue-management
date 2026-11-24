@@ -1,16 +1,18 @@
-﻿import "dotenv/config";
-import cors from "cors";
-import express from "express";
+import "dotenv/config";
 import { createServer } from "node:http";
+import { createApp } from "./app.js";
 import { database } from "./database.js";
 import { configureSocketServer } from "./socket.js";
-const app = express();
+
+const app = createApp(database);
 const httpServer = createServer(app);
 const io = configureSocketServer(httpServer);
 const port = Number(process.env.PORT ?? 3001);
-app.use(cors({ origin: process.env.FRONTEND_ORIGIN ?? "http://localhost:5173" }));
-app.use(express.json());
-app.get("/api/health", (_request, response) => response.json({ status: "ok" }));
-io.on("connection", () => { /* Queue events will be added in a later feature task. */ });
-httpServer.listen(port, () => console.log("Salon Queue backend listening at http://localhost:" + port));
-void database;
+
+io.on("connection", () => {
+  // Queue realtime events will be added with the relevant staff and display features.
+});
+
+httpServer.listen(port, () => {
+  console.log("Salon Queue backend listening at http://localhost:" + port);
+});

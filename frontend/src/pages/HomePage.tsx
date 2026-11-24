@@ -1,0 +1,4 @@
+﻿import { Link } from "react-router-dom";
+export default function HomePage() {
+  return <section className="mx-auto max-w-3xl py-8 text-center sm:py-16"><p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-rosewood">A calmer salon visit</p><h1 className="text-4xl font-semibold tracking-tight sm:text-6xl">Welcome to Maison Rose</h1><p className="mx-auto mt-5 max-w-xl text-lg leading-7 text-charcoal/70">Browse salon services and join the queue when you are ready.</p><Link className="mt-8 inline-flex rounded-full bg-rosewood px-6 py-3 font-semibold text-white" to="/join">Join Queue</Link><div className="mt-14 rounded-3xl border border-blush bg-white/70 p-8 text-left shadow-sm"><h2 className="text-xl font-semibold">Customer Home and Services</h2><p className="mt-2 text-charcoal/70">Service browsing will be added in a later feature task.</p></div></section>;
+}

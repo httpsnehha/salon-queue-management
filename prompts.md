@@ -346,3 +346,28 @@ Do not claim that browser testing passed unless it was actually performed.
 - Backend tests: 15 passed.
 - Backend and frontend builds passed.
 - Browser testing subsequently confirmed the customer route, staff automatic updates, and live display automatic updates.
+
+Update the Live Queue Display navigation.
+
+
+
+Read AGENTS.md and the existing app structure before making changes.
+
+
+
+Problem:\
+The shared navigation header is hidden on `/display`, which is good for TV presentation, but users have no visible way to navigate back to the rest of the application.
+
+
+
+Requirements:
+
+1. Keep the shared navigation header hidden on `/display`.
+2. Add a small, clearly visible "← Back to Home" button in the top-left area of the display page.
+3. Clicking it must navigate to `/` using the existing React Router navigation approach.
+4. Style it subtly so it does not distract from the live queue or make the display unsuitable for TV screens.
+5. Make sure it is accessible and works on mobile, tablet, and desktop.
+6. Do not change the clock, connection indicator, queue data, Socket.IO behavior, or other existing functionality.
+7. Do not add unrelated features.
+
+Run the frontend build and relevant backend tests if applicable. Report changed files and verification results. Do not claim browser testing unless performed.

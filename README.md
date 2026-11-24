@@ -40,6 +40,8 @@ Set this environment variable in the Vercel frontend project:
 
 - VITE_API_URL=https://salon-queue-management-2wt1.onrender.com
 
+In the Render service settings, set the Root Directory to `backend`, Build Command to `npm ci --include=dev && npm run build`, and Start Command to `npm start`. The explicit `--include=dev` is required because TypeScript and its declaration packages are development dependencies used during compilation. Do not use `npm install --omit=dev` as the build command.
+
 Set these in Render for the backend service:
 
 - FRONTEND_ORIGIN: the exact origin of the deployed Vercel site (for example, https://your-project.vercel.app). Multiple exact origins may be comma-separated.
@@ -47,7 +49,7 @@ Set these in Render for the backend service:
 - STAFF_SESSION_SECRET: a random secret of at least 32 characters.
 - Keep NODE_ENV=production so the staff session cookie uses Secure and SameSite=None for cross-origin requests.
 
-After setting VITE_API_URL in Vercel, redeploy the frontend because Vite embeds environment variables at build time. Staff requests send credentials, and the backend allows credentialed CORS only from configured frontend origins. Do not put backend secrets in Vercel or frontend source code.
+After pushing the dependency/build configuration update, select the latest commit in Render and manually deploy it; this repository change does not deploy automatically. If Render still shows commit a52ee00, select a newer commit containing the updated configuration. After setting VITE_API_URL in Vercel, redeploy the frontend because Vite embeds environment variables at build time. Staff requests send credentials, and the backend allows credentialed CORS only from configured frontend origins. Do not put backend secrets in Vercel or frontend source code.
 
 ## Routes
 

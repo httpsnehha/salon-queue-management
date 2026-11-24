@@ -129,3 +129,16 @@ Rules:
 - No customer reviews or ratings.
 - No loyalty or reward system.
 - Keep the application focused on salon services and queue management.
+
+
+## Current implemented workflow (supersedes the earlier status flow above)
+
+The current queue status flow is Waiting, then Called, then In chair, then Done. A waiting entry may instead become **Cancelled**, and a Called entry becomes **No-show** if it has not started within 10 minutes. Status changes are validated by the backend. Tokens remain issued after cancellation or no-show and are never reused. A returning no-show customer must be registered again and receives a new token.
+
+Reception selects an on-duty barber and calls the earliest eligible Waiting customer who selected that barber or Any. A specific barber preference is never reassigned. A barber cannot have more than one customer In chair. Barbers on break cannot receive new calls.
+
+Online queue joining can be Open or Closed. Closing applies to online customer registration; authenticated reception staff may still create walk-in registrations. Active services are loaded from SQLite and deactivated services cannot receive new registrations. Queue entries retain service name, Gujarati name, price, and duration snapshots.
+
+Service start and completion timestamps are stored. Today's served count is the number of Done entries; average wait uses valid registration-to-service-start durations for Done entries; no-shows count actual No-show entries. The calendar day uses `QUEUE_TIME_ZONE`, defaulting to `Asia/Kolkata`.
+
+Owner and reception management APIs use the existing staff access-code session. Barber View uses that same session and is not a separate account system. Queue, settings, service, and barber changes are broadcast through Socket.IO after their database writes commit.

@@ -371,3 +371,165 @@ Requirements:
 7. Do not add unrelated features.
 
 Run the frontend build and relevant backend tests if applicable. Report changed files and verification results. Do not claim browser testing unless performed.
+
+## Prompt 7 - Complete remaining application requirements
+
+# Complete the remaining Salon Queue Management System requirements
+
+Read `AGENTS.md`, all files in `docs/`, and the existing frontend, backend, database schema, and tests before making changes.
+
+The goal is to complete the remaining requirements from the professor's Salon Queue Management Vibe Coding Guide. The existing customer registration, customer status, staff dashboard, live display, real-time updates, and navigation already work. Preserve them. Do not rebuild the project.
+
+Do not add unrelated features such as payments, loyalty points, home services, e-commerce, or customer accounts.
+
+## IMPORTANT: Implement the complete remaining scope
+
+### 1. Owner Settings — `/admin`
+
+Replace the placeholder page with a working responsive settings dashboard.
+
+Required features:
+
+- Display services with English name, Gujarati name, duration, price, and on/off status.
+- Allow adding and editing services.
+- Allow turning services on and off.
+- Turning a service off must hide it from customer service selection and prevent new registrations.
+- Never permanently delete service history or existing queue records.
+- Display barbers and allow toggling whether each barber is on duty today.
+- Add the Open/Closed switch for online queue joining.
+- When closed, show a clear message to customers and prevent online joining.
+- Do not block staff walk-in registration when the online queue is closed.
+- Display today's statistics:
+  1. Customers served.
+  2. Average waiting time.
+  3. No-shows.
+
+Use the existing staff session to protect owner-settings API operations. Do not create a separate admin login system. Do not expose management endpoints publicly.
+
+### 2. Correct queue workflow
+
+Implement the professor's required statuses:
+
+`Waiting → Called → In chair → Done`
+
+Additional allowed transitions:
+
+- Waiting → Cancelled
+- Called → No-show
+
+Rules:
+
+- First come, first served.
+- Call Next for a specific barber selects the earliest customer who selected that barber or Any.
+- A customer who selected a specific barber must never be reassigned to another barber.
+- Only one customer can be In chair with a barber at a time.
+- If a Called customer does not arrive within 10 minutes, mark them No-show.
+- If a no-show customer returns, register them at the END with a new token.
+- Cancelled and No-show records must remain visible in history.
+- Never reuse issued daily tokens.
+
+### 3. Barber management and Barber View
+
+Add the required barber functionality:
+
+- Display barbers who are on duty.
+- Allow reception to call the next eligible customer for a selected barber.
+- Create or complete the Barber View required by the guide.
+- Barber can Start service and mark it Done.
+- Barber can mark themselves On break and return from break.
+- A barber on break must not receive new customers.
+- Customers choosing a barber who is on break should receive a clear message.
+- Updates must synchronize with the reception dashboard, customer status page, and live display through the existing Socket.IO system.
+
+If the current schema does not contain barber records, add the smallest necessary SQLite migration and a simple way to manage the barber roster. Do not invent real personal information for barbers.
+
+### 4. Reception and walk-in handling
+
+Update the reception dashboard to support:
+
+- Waiting, Called, In chair, Done, Cancelled, and No-show sections.
+- Call Next for a selected barber.
+- Walk-in registration even when online joining is closed.
+- Correct status transitions and validation.
+- Clear empty states.
+- Real-time updates.
+
+### 5. Customer screens
+
+Update Home, Join Queue, and Customer Queue Status:
+
+- Load active services from the backend rather than relying on hard-coded sample services.
+- Show English and Gujarati service names.
+- Add English/Gujarati language switching.
+- Respect the online queue Open/Closed setting.
+- Show a clear explanation when online joining is closed.
+- Show the assigned barber and relevant status.
+- Show the Called and It's your turn states correctly.
+- Preserve existing customer registration, token generation, and queue history.
+
+### 6. Wait-time and statistics calculations
+
+Use actual timestamps rather than estimates presented as actual data.
+
+- Record when a customer is called and when service starts.
+- Calculate waiting time from registration to service start.
+- Calculate average waiting time from valid completed service records for today.
+- Count no-shows using actual No-show records.
+- Count customers served using Done records.
+- Use the configured queue timezone, currently Asia/Kolkata by default.
+
+### 7. Database and backend
+
+- Create safe SQLite migrations for existing databases.
+- Preserve all existing customer and service records.
+- Preserve service snapshots on queue entries.
+- Validate every status transition on the backend.
+- Protect management operations using the existing staff session.
+- Validate all inputs.
+- Keep transactions safe against concurrent queue actions.
+- Broadcast Socket.IO updates only after successful database commits.
+- Do not trust frontend-only validation for important rules.
+
+### 8. Testing
+
+Add or update automated tests for:
+
+- Existing customer registration and token generation.
+- Online queue closure.
+- Staff walk-in registration while online joining is closed.
+- Service activation and deactivation.
+- Historical service snapshots.
+- Barber availability and break status.
+- Barber-specific queue selection.
+- One customer in chair per barber.
+- Waiting → Called → In chair → Done.
+- Waiting → Cancelled.
+- Called → No-show after 10 minutes.
+- Waiting-time and daily statistics calculations.
+- Unauthorized management requests.
+- Existing database migration and preservation of data.
+- Socket.IO updates.
+
+Run all backend tests and frontend/backend production builds. Fix failures caused by your changes.
+
+## Implementation instructions
+
+1. First inspect the actual code and existing database. Do not assume filenames or API structures.
+2. Implement the complete scope in logically grouped changes. Do not stop after producing another plan.
+3. Reuse existing components, styles, APIs, and architecture wherever possible.
+4. Do not break existing working screens or routes.
+5. Do not create fake statistics or misleading sample data.
+6. Do not remove existing functionality.
+7. Update `docs/`, `README.md`, and `prompts.md` to accurately reflect implemented features. Do not claim a feature is complete unless it works.
+8. If a requirement cannot be implemented because an essential decision or information is missing, explain the exact blocker instead of silently inventing behavior.
+
+At the end, report:
+- Features implemented.
+- Files changed.
+- Database migrations made.
+- Tests passed/failed.
+- Frontend and backend build results.
+- Any remaining requirements.
+- Exact manual testing steps for me.
+
+Prioritize completing the professor's requirements over cosmetic changes.

@@ -1,75 +1,69 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getRegistration, type QueueRegistration, type QueueUpdate } from "../lib/api";
+import { getRegistration, type QueueRegistration, type QueueStatus } from "../lib/api";
+import { LanguageToggle, useCustomerLanguage } from "../components/CustomerLanguage";
 import { queueSocket } from "../lib/socket";
 
-function formatPrice(price: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(price);
+function token(value: number) { return "#" + String(value).padStart(3, "0"); }
+function tx(gu: boolean, en: string, translated: string) { return gu ? translated : en; }
+const states: QueueStatus[] = ["Waiting", "Called", "In chair", "Done"];
+function statusLabel(status: QueueStatus, gu: boolean) {
+  if (!gu) return status;
+  const labels: Record<QueueStatus, string> = {
+    Waiting: "રાહ જોઈ રહ્યા છે", Called: "તમારો વારો છે", "In chair": "સેવા ચાલુ છે",
+    Done: "પૂર્ણ", Cancelled: "રદ", "No-show": "હાજર ન રહ્યા",
+  };
+  return labels[status];
 }
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
-
 export default function QueueStatusPage() {
   const { id = "" } = useParams();
+  const { language } = useCustomerLanguage();
+  const gu = language === "gu";
   const [registration, setRegistration] = useState<QueueRegistration | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const loadRegistration = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try { setRegistration(await getRegistration(id)); }
-    catch (requestError) {
-      setRegistration(null);
-      setError(requestError instanceof Error ? requestError.message : "Queue details could not be loaded.");
-    } finally { setLoading(false); }
+  const load = useCallback(async () => {
+    try { setRegistration(await getRegistration(id)); setError(""); }
+    catch (err) { setError(err instanceof Error ? err.message : "This queue registration could not be found."); }
+    finally { setLoading(false); }
   }, [id]);
-
-  useEffect(() => { void loadRegistration(); }, [loadRegistration]);
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const handleUpdate = (update: QueueUpdate) => {
-      if (update.registrationId === id) void loadRegistration();
-    };
-    queueSocket.on("queue:updated", handleUpdate);
-    queueSocket.connect();
-    return () => {
-      queueSocket.off("queue:updated", handleUpdate);
-      queueSocket.disconnect();
-    };
-  }, [id, loadRegistration]);
+    const update = (event: { registrationId: string }) => { if (event.registrationId === id) void load(); };
+    const reconnect = () => { void load(); };
+    queueSocket.on("queue:updated", update); queueSocket.on("connect", reconnect);
+    if (!queueSocket.active) queueSocket.connect();
+    return () => { queueSocket.off("queue:updated", update); queueSocket.off("connect", reconnect); queueSocket.disconnect(); };
+  }, [id, load]);
 
-  if (loading) return <section className="mx-auto max-w-2xl rounded-3xl border border-blush bg-white p-8 text-charcoal/70" role="status">Loading your queue details…</section>;
-  if (error || !registration) return <section className="mx-auto max-w-2xl rounded-3xl border border-blush bg-white p-7 shadow-sm">
-    <h1 className="text-2xl font-semibold">Queue details unavailable</h1><p className="mt-3 text-charcoal/70">{error || "This queue registration could not be found."}</p>
-    <div className="mt-6 flex flex-wrap gap-3"><button className="min-h-11 rounded-full bg-rosewood px-5 py-2 font-semibold text-white" type="button" onClick={() => void loadRegistration()}>Try again</button><Link className="inline-flex min-h-11 items-center rounded-full border border-charcoal/20 px-5 py-2 font-semibold" to="/">Return home</Link></div>
-  </section>;
+  if (loading) return <section role="status" className="mx-auto max-w-2xl rounded-3xl border border-blush bg-white p-8 text-charcoal/70">Loading queue details...</section>;
+  if (!registration) return <section className="mx-auto max-w-2xl rounded-3xl border border-blush bg-white p-8"><h1 className="text-2xl font-semibold">Queue details unavailable</h1><p className="mt-3 text-charcoal/70">{error || "This registration could not be found."}</p><Link className="mt-6 inline-flex min-h-11 items-center rounded-full bg-rosewood px-5 font-semibold text-white" to="/">Return home</Link></section>;
+
+  const terminal = registration.status === "Cancelled" || registration.status === "No-show";
+  const progress = states.indexOf(registration.status);
+  const barber = registration.assigned_barber_name || registration.preferred_barber_name;
+  const message = registration.status === "Called"
+    ? tx(gu, "It's your turn. Please go to the barber shown below.", "તમારો વારો છે. કૃપા કરીને નીચે દર્શાવેલા વાળંદ પાસે જાઓ.")
+    : registration.status === "In chair"
+      ? tx(gu, "Your service has started.", "તમારી સેવા શરૂ થઈ ગઈ છે.")
+      : registration.status === "Done"
+        ? tx(gu, "Your service is complete. Thank you for visiting.", "તમારી સેવા પૂર્ણ થઈ છે. મુલાકાત બદલ આભાર.")
+        : registration.status === "Cancelled"
+          ? tx(gu, "This queue registration is cancelled.", "આ કતાર નોંધણી રદ કરવામાં આવી છે.")
+          : registration.status === "No-show"
+            ? tx(gu, "This token was marked No-show. If you return, please register again for a new token.", "આ ટોકન ગેરહાજર તરીકે નોંધાયો છે. પાછા આવો ત્યારે નવા ટોકન માટે ફરી નોંધણી કરો.")
+            : tx(gu, "Your registration is confirmed. The approximate wait may change as the queue moves.", "તમારી નોંધણી પુષ્ટિ થઈ છે. કતાર આગળ વધે તેમ અંદાજિત રાહનો સમય બદલાઈ શકે છે.");
 
   return <section className="mx-auto max-w-3xl">
-    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-rosewood">Queue registration</p><h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Your queue status</h1>
-    <div className="mt-7 rounded-3xl border border-blush bg-white p-6 shadow-sm sm:p-9">
-      <div className="flex flex-col justify-between gap-5 border-b border-charcoal/10 pb-6 sm:flex-row sm:items-center">
-        <div><p className="text-sm text-charcoal/60">Your token</p><p className="mt-1 text-6xl font-semibold tracking-tight">#{String(registration.token_number).padStart(3, "0")}</p></div>
-        <span className="inline-flex w-fit rounded-full bg-cream px-4 py-2 text-sm font-semibold text-rosewood">{registration.status}</span>
-      </div>
-      <div className="mt-6 grid gap-5 sm:grid-cols-2">
-        <div><p className="text-xs uppercase tracking-[0.12em] text-charcoal/50">Customer</p><p className="mt-1 font-medium">{registration.customer_name}</p></div>
-        <div><p className="text-xs uppercase tracking-[0.12em] text-charcoal/50">Service</p><p className="mt-1 font-medium">{registration.service_name}</p></div>
-        <div><p className="text-xs uppercase tracking-[0.12em] text-charcoal/50">Price</p><p className="mt-1 font-medium">{formatPrice(registration.service_price)}</p></div>
-        <div><p className="text-xs uppercase tracking-[0.12em] text-charcoal/50">Estimated service duration</p><p className="mt-1 font-medium">{registration.service_duration_minutes} minutes</p></div>
-        <div><p className="text-xs uppercase tracking-[0.12em] text-charcoal/50">Registered</p><p className="mt-1 font-medium">{formatDate(registration.registered_at)}</p></div>
-        {registration.status === "Waiting" && <>
-          <div><p className="text-xs uppercase tracking-[0.12em] text-charcoal/50">Queue position</p><p className="mt-1 font-medium">{registration.position ?? "—"}</p></div>
-          <div><p className="text-xs uppercase tracking-[0.12em] text-charcoal/50">Approximate waiting time</p><p className="mt-1 font-medium">{registration.approximate_wait_minutes ?? 0} minutes</p></div>
-        </>}
-      </div>
-      <p className="mt-7 rounded-2xl bg-cream p-4 text-sm leading-6 text-charcoal/70" role="status">
-        {registration.status === "Completed" ? "Your service is complete. Thank you for visiting."
-          : registration.status === "Waiting" ? "Your registration is confirmed. Your approximate waiting time may change as the queue moves."
-          : registration.status === "Cancelled" ? "This queue registration is cancelled."
-          : "Your service is in progress."}
-      </p>
-      <div className="mt-6 flex flex-wrap gap-3"><button className="min-h-11 rounded-full border border-charcoal/20 px-5 py-2 font-semibold hover:bg-cream" type="button" onClick={() => void loadRegistration()}>Refresh status</button><Link className="inline-flex min-h-11 items-center rounded-full bg-rosewood px-5 py-2 font-semibold text-white hover:bg-charcoal" to="/">Return home</Link></div>
-    </div>
+    <div className="flex items-center justify-between"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-rosewood">{tx(gu, "Queue registration", "કતાર નોંધણી")}</p><LanguageToggle /></div>
+    <h1 className="mt-3 text-3xl font-semibold sm:text-4xl">{tx(gu, "Your queue status", "તમારી કતારની સ્થિતિ")}</h1>
+    <article className="mt-6 rounded-3xl border border-blush bg-white p-6 shadow-sm sm:p-9">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm text-charcoal/55">{tx(gu, "Your token", "તમારો ટોકન")}</p><p className="mt-1 text-6xl font-bold tracking-tight sm:text-7xl">{token(registration.token_number)}</p></div><span className="w-fit rounded-full bg-cream px-4 py-2 text-sm font-semibold text-rosewood">{statusLabel(registration.status, gu)}</span></div>
+      <div className="mt-7 grid gap-4 rounded-2xl bg-cream p-5 sm:grid-cols-2"><div><p className="text-xs uppercase tracking-wide text-charcoal/50">{tx(gu, "Customer", "ગ્રાહક")}</p><p className="mt-1 font-medium">{registration.customer_name}</p></div><div><p className="text-xs uppercase tracking-wide text-charcoal/50">{tx(gu, "Service", "સેવા")}</p><p className="mt-1 font-medium">{gu ? registration.service_name_gu || registration.service_name : registration.service_name}</p></div><div><p className="text-xs uppercase tracking-wide text-charcoal/50">{tx(gu, "Barber", "વાળંદ")}</p><p className="mt-1 font-medium">{barber || tx(gu, "Any available barber", "કોઈપણ ઉપલબ્ધ વાળંદ")}</p></div><div><p className="text-xs uppercase tracking-wide text-charcoal/50">{tx(gu, "Status", "સ્થિતિ")}</p><p className="mt-1 font-medium">{statusLabel(registration.status, gu)}</p></div></div>
+      {!terminal && <div className="mt-7"><ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">{states.map((step, index) => <li key={step} className={"rounded-xl p-3 text-center text-xs sm:text-sm " + (progress >= index ? "bg-rosewood text-white" : "bg-cream text-charcoal/55")}>{statusLabel(step, gu)}</li>)}</ol></div>}
+      {registration.status === "Waiting" && <div className="mt-5 grid grid-cols-2 gap-4 rounded-2xl border border-charcoal/10 p-4"><div><p className="text-xs uppercase text-charcoal/50">{tx(gu, "Queue position", "કતારમાં સ્થાન")}</p><p className="mt-1 font-medium">{registration.position ?? "..."}</p></div><div><p className="text-xs uppercase text-charcoal/50">{tx(gu, "Approximate waiting time", "અંદાજિત રાહનો સમય")}</p><p className="mt-1 font-medium">{registration.approximate_wait_minutes ?? "..."} min</p></div></div>}
+      <p role="status" className="mt-6 rounded-2xl bg-cream p-4 text-sm leading-6 text-charcoal/70">{message}</p>
+      <div className="mt-6 flex flex-wrap gap-3"><button className="min-h-11 rounded-full border border-charcoal/20 px-5 font-semibold hover:bg-cream" type="button" onClick={() => void load()}>{tx(gu, "Refresh status", "સ્થિતિ તાજી કરો")}</button><Link className="inline-flex min-h-11 items-center rounded-full bg-rosewood px-5 font-semibold text-white" to="/">{tx(gu, "Return home", "ઘરે પાછા જાઓ")}</Link></div>
+    </article>
   </section>;
 }

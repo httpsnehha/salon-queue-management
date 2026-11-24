@@ -1,63 +1,91 @@
 # Salon Queue Management System
 
-**Live demo:** Deployment pending.
-
-## Project status
-
-This repository contains the initial app setup. All six documented screens are navigable, and the frontend, Express backend, SQLite connection, and Socket.IO foundation are in place. Queue and service functionality will be implemented in later tasks.
+A responsive salon queue application built with React, Vite, TypeScript, Tailwind CSS v4, Express, Node.js built-in SQLite, and Socket.IO.
 
 ## Requirements
 
-- Node.js 26.13.1 and npm
-- Tailwind CSS v4 through the Vite plugin
+- Node.js 26.13.1 (uses the built-in `node:sqlite` module)
+- npm
 
-Node.js 26 provides the built-in node:sqlite module, so no native SQLite dependency installation is required. Tailwind uses the v4 Vite integration and CSS import; this project does not use v3 PostCSS directives or configuration.
+## First-time setup (PowerShell)
 
-## Install dependencies
-
-In PowerShell from the repository root, use separate terminals.
+From the project root, open two terminals.
 
 Frontend terminal:
 
-    cd frontend
-    Copy-Item .env.example .env
-    npm install
+```powershell
+cd frontend
+Copy-Item .env.example .env
+npm install
+```
 
 Backend terminal:
 
-    cd backend
-    Copy-Item .env.example .env
-    npm install
+```powershell
+cd backend
+Copy-Item .env.example .env
+npm install
+```
 
-The real .env files are ignored by Git and contain local configuration only.
+Set a private staff code and a random session secret in `backend/.env`. For example, generate a secret with PowerShell:
 
-## Run the frontend
+```powershell
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+```
 
-From the frontend directory:
+Copy the generated value into `STAFF_SESSION_SECRET`; set `STAFF_ACCESS_CODE` to a value you choose. Do not commit the real `.env` files. The SQLite database is created under `backend/data` by default.
 
-    npm run dev
+## Run the application
 
-Open the URL printed by Vite, normally http://localhost:5173. The development proxy forwards /api and Socket.IO traffic to VITE_API_URL in frontend/.env.
+In the frontend terminal:
 
-## Run the backend
+```powershell
+npm run dev
+```
 
-From the backend directory in a separate terminal:
+In the backend terminal:
 
-    npm run dev
+```powershell
+npm run dev
+```
 
-The backend listens at http://localhost:3001 by default. Its SQLite database path is configured in backend/.env; the parent folder is created automatically.
+Vite serves the frontend at http://localhost:5173 and proxies API and Socket.IO traffic to the backend at http://localhost:3001. Backend CORS uses `FRONTEND_ORIGIN`. `QUEUE_TIME_ZONE` defaults to `Asia/Kolkata` and can be changed in `backend/.env`.
 
-## Verify
+## Routes
 
-- Open http://localhost:5173 and use the navigation for /, /join, /queue/demo, /staff, /display, and /admin.
-- Open http://localhost:3001/api/health or run Invoke-RestMethod http://localhost:3001/api/health in PowerShell. Expected response: status is ok.
-- The frontend API helper calls /api/health through the Vite proxy.
+- Customer Home and Services: `/`
+- Join Queue: `/join`
+- Customer Queue Status: `/queue/:id`
+- Reception Queue Dashboard: `/staff`
+- Live Queue Display: `/display`
+- Owner Settings: `/admin`
+- Barber View: `/barber`
 
-Socket.IO is initialized for future realtime updates. Queue events and queue database tables are not implemented in this setup task.
+Management pages use the backend-configured staff access-code session. Queue registrations use daily sequential tokens. SQLite startup performs safe additive/workflow migrations while retaining historical customer and service snapshots.
 
-## Documentation
+## Verify and test
 
-- docs/01-brief.md
-- docs/02-screens.md
-- docs/03-flows-rules.md
-- AGENTS.md
+Health check (backend running):
+
+```powershell
+Invoke-RestMethod http://localhost:3001/api/health
+```
+
+Run automated backend tests:
+
+```powershell
+cd backend
+npm test
+npm run build
+```
+
+Build the frontend in a separate terminal:
+
+```powershell
+cd frontend
+npm run build
+```
+
+Manual checks: create an on-duty barber in Owner Settings, join online and as a staff walk-in, call the next eligible customer, start and finish the service from Barber View or Reception, verify customer status and Live Display update, try cancellation and the 10-minute no-show rule, and toggle online joining closed to check the customer explanation and continued walk-in registration.
+
+Automated build and test results are reported for the exact current revision; browser and physical TV checks are only reported when performed.

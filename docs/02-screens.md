@@ -222,3 +222,20 @@
 - Make all screens mobile-friendly.
 - Use clear status colours consistently.
 - Do not add features outside the project brief.
+
+
+## Current implemented screen requirements
+
+These current screen details supersede conflicting legacy interaction descriptions above.
+
+### Reception Queue Dashboard
+The dashboard at `/staff` groups today's entries into Waiting, Called, In chair, Done, Cancelled, and No-show. Reception can call the next eligible customer per on-duty barber, register walk-ins while online joining is closed, cancel Waiting entries, and mark In chair entries Done. Earlier Cancelled and No-show records are retained in a read-only history list.
+
+### Owner Settings
+The Owner Settings screen at `/admin` displays services with English and Gujarati names, duration, price, and active state. The existing staff session protects add/edit/activate operations. It also manages the barber roster, today's duty and break state, online queue Open/Closed setting, and today's served, average wait, and no-show statistics. Service records are deactivated instead of deleted so queue snapshots remain intact.
+
+### Barber View
+The Barber View at `/barber` uses the shared staff access-code session. A barber profile can view Called customers assigned to them, start a service, mark it Done, and go on or return from break.
+
+### Customer language and queue availability
+Home, Join Queue, and Queue Status support English/Gujarati switching. Home and Join Queue load active services and live public queue availability. Closed online joining shows an explanation and blocks online registration; reception walk-ins remain available. Customer status includes Called, In chair, Done, Cancelled, and No-show states and displays the chosen or assigned barber when known.

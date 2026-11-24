@@ -1,178 +1,114 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { ApiError, changeQueueStatus, createStaffSession, endStaffSession, getStaffQueue, type QueueStatus, type StaffQueueEntry } from "../lib/api";
+import { ApiError, callNextForBarber, changeQueueStatus, createStaffSession, createWalkIn, endStaffSession, getBarbers, getServices, getStaffQueue, getQueueHistory, type QueueHistoryEntry, type BarberOption, type QueueStatus, type ServiceOption, type StaffQueueEntry } from "../lib/api";
 import { queueSocket } from "../lib/socket";
 
-const sections: QueueStatus[] = ["Waiting", "In Service", "Completed", "Cancelled"];
-
-function formatToken(number: number) {
-  return "#" + String(number).padStart(3, "0");
-}
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
-function getMessage(error: unknown) {
-  return error instanceof Error ? error.message : "The request could not be completed.";
-}
+const sections: QueueStatus[] = ["Waiting", "Called", "In chair", "Done", "Cancelled", "No-show"];
+function token(value: number) { return "#" + String(value).padStart(3, "0"); }
+function time(value: string) { return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
 
 export default function StaffPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [accessCode, setAccessCode] = useState("");
   const [loginError, setLoginError] = useState("");
   const [entries, setEntries] = useState<StaffQueueEntry[]>([]);
+  const [history, setHistory] = useState<QueueHistoryEntry[]>([]);
+  const [barbers, setBarbers] = useState<BarberOption[]>([]);
+  const [services, setServices] = useState<ServiceOption[]>([]);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [serviceId, setServiceId] = useState("");
+  const [preferredBarberId, setPreferredBarberId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [pendingId, setPendingId] = useState("");
-  const inFlight = useRef(new Set<string>());
-  const queueRequestVersion = useRef(0);
+  const busy = useRef(new Set<string>());
+  const requestVersion = useRef(0);
 
   const loadQueue = useCallback(async () => {
-    const requestVersion = ++queueRequestVersion.current;
-    setLoading(true);
+    const version = ++requestVersion.current;
     try {
-      const result = await getStaffQueue();
-      if (requestVersion !== queueRequestVersion.current) return;
-      setEntries(result.entries);
-      setAuthenticated(true);
-      setError("");
-    } catch (requestError) {
-      if (requestVersion !== queueRequestVersion.current) return;
-      if (requestError instanceof ApiError && requestError.status === 401) {
-        setAuthenticated(false);
-        setEntries([]);
-      } else {
-        setError(getMessage(requestError));
-      }
-    } finally {
-      if (requestVersion === queueRequestVersion.current) setLoading(false);
-    }
-  }, []);
+      const [queue, barberItems, serviceItems, past] = await Promise.all([getStaffQueue(), getBarbers(), getServices(), getQueueHistory()]);
+      if (version !== requestVersion.current) return;
+      setEntries(queue.entries); setHistory(past.entries); setBarbers(barberItems); setServices(serviceItems); setAuthenticated(true); setError("");
+      if (!serviceId && serviceItems.length) setServiceId(serviceItems[0].id);
+    } catch (err) {
+      if (version !== requestVersion.current) return;
+      if (err instanceof ApiError && err.status === 401) { setAuthenticated(false); setEntries([]); setHistory([]); }
+      else setError(err instanceof Error ? err.message : "Queue could not be loaded.");
+    } finally { if (version === requestVersion.current) setLoading(false); }
+  }, [serviceId]);
 
   useEffect(() => { void loadQueue(); }, [loadQueue]);
-
   useEffect(() => {
     if (!authenticated) return;
-    const handleQueueUpdate = () => { void loadQueue(); };
-    const handleReconnect = () => { void loadQueue(); };
-    queueSocket.on("queue:updated", handleQueueUpdate);
-    queueSocket.on("connect", handleReconnect);
+    const sync = () => { void loadQueue(); };
+    queueSocket.on("queue:updated", sync); queueSocket.on("barbers:updated", sync); queueSocket.on("services:updated", sync); queueSocket.on("connect", sync);
     if (!queueSocket.active) queueSocket.connect();
-    return () => {
-      queueSocket.off("queue:updated", handleQueueUpdate);
-      queueSocket.off("connect", handleReconnect);
-      queueSocket.disconnect();
-    };
+    return () => { queueSocket.off("queue:updated", sync); queueSocket.off("barbers:updated", sync); queueSocket.off("services:updated", sync); queueSocket.off("connect", sync); queueSocket.disconnect(); };
   }, [authenticated, loadQueue]);
 
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!accessCode.trim()) {
-      setLoginError("Enter the staff access code.");
-      return;
-    }
-    setLoginError("");
+  async function login(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setLoginError("");
+    try { await createStaffSession(accessCode); setAccessCode(""); setAuthenticated(true); await loadQueue(); }
+    catch (err) { setLoginError(err instanceof Error ? err.message : "Access could not be verified."); }
+  }
+  async function logout() {
+    try { await endStaffSession(); setAuthenticated(false); setEntries([]); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not sign out."); }
+  }
+  async function status(entry: StaffQueueEntry, next: QueueStatus) {
+    if (busy.current.size) return;
+    busy.current.add(entry.id); setPending(entry.id); setError(""); setNotice("");
+    try { await changeQueueStatus(entry.id, next); setNotice(token(entry.token_number) + " moved to " + next + "."); await loadQueue(); }
+    catch (err) { setError(err instanceof Error ? err.message : "Queue status could not be updated."); }
+    finally { busy.current.delete(entry.id); setPending(""); }
+  }
+  async function callNext(barber: BarberOption) {
+    setPending(barber.id); setError(""); setNotice("");
+    try { const result = await callNextForBarber(barber.id); setNotice(token(result.token_number) + " called for " + barber.name + "."); await loadQueue(); }
+    catch (err) { setError(err instanceof Error ? err.message : "Next customer could not be called."); }
+    finally { setPending(""); }
+  }
+  async function walkIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setPending("walk-in"); setError(""); setNotice("");
     try {
-      await createStaffSession(accessCode);
-      setAccessCode("");
-      setAuthenticated(true);
-      await loadQueue();
-    } catch (requestError) {
-      setLoginError(getMessage(requestError));
-    }
+      const result = await createWalkIn({ customerName: name, phoneNumber: phone, serviceId, preferredBarberId: preferredBarberId || null });
+      setNotice("Walk-in registered with token " + result.token + "."); setName(""); setPhone(""); setPreferredBarberId(""); await loadQueue();
+    } catch (err) { setError(err instanceof Error ? err.message : "Walk-in registration could not be completed."); }
+    finally { setPending(""); }
   }
 
-  async function handleLogout() {
-    try {
-      await endStaffSession();
-      setAuthenticated(false);
-      setEntries([]);
-      setNotice("");
-    } catch (requestError) {
-      setError(getMessage(requestError));
-    }
-  }
-
-  async function handleStatusChange(entry: StaffQueueEntry, status: QueueStatus) {
-    if (inFlight.current.size > 0) return;
-    inFlight.current.add(entry.id);
-    setPendingId(entry.id);
-    setError("");
-    setNotice("");
-    try {
-      await changeQueueStatus(entry.id, status);
-      setNotice(formatToken(entry.token_number) + " moved to " + status + ".");
-      await loadQueue();
-    } catch (requestError) {
-      setError(getMessage(requestError));
-      if (requestError instanceof ApiError && requestError.status === 401) setAuthenticated(false);
-    } finally {
-      inFlight.current.delete(entry.id);
-      setPendingId("");
-    }
-  }
-
-  if (authenticated === null && loading) {
-    return <section className="rounded-3xl border border-blush bg-white p-7 text-charcoal/70" role="status">Checking staff session…</section>;
-  }
-
-  if (!authenticated) {
-    return <section className="mx-auto max-w-lg">
-      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-rosewood">Receptionist / staff</p>
-      <h1 className="mt-3 text-3xl font-semibold">Staff Queue Dashboard</h1>
-      <form className="mt-6 rounded-3xl border border-blush bg-white p-6 shadow-sm sm:p-8" onSubmit={handleLogin}>
-        <label className="mb-2 block text-sm font-medium" htmlFor="staff-access-code">Staff access code</label>
-        <input className="min-h-12 w-full rounded-xl border border-charcoal/20 px-4 outline-none focus:border-rosewood focus:ring-2 focus:ring-blush" id="staff-access-code" type="password" autoComplete="current-password" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} />
-        {(loginError || error) && <p className="mt-3 text-sm text-red-700" role="alert">{loginError || error}</p>}
-        <button className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-rosewood px-6 py-3 font-semibold text-white hover:bg-charcoal" type="submit">Open staff dashboard</button>
-      </form>
-    </section>;
-  }
-
-  const counts = sections.map((status) => ({ status, count: entries.filter((entry) => entry.status === status).length }));
+  if (loading && authenticated === null) return <p role="status" className="rounded-3xl border border-blush bg-white p-7">Checking staff session...</p>;
+  if (!authenticated) return <section className="mx-auto max-w-lg"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-rosewood">Reception</p><h1 className="mt-3 text-3xl font-semibold">Reception Queue</h1>
+    <form className="mt-6 rounded-3xl border border-blush bg-white p-6 shadow-sm" onSubmit={login}><label htmlFor="staff-code" className="mb-2 block text-sm font-medium">Staff access code</label><input id="staff-code" type="password" required autoComplete="current-password" className="min-h-12 w-full rounded-xl border border-charcoal/20 px-4" value={accessCode} onChange={(e) => setAccessCode(e.target.value)} />{loginError && <p role="alert" className="mt-3 text-sm text-red-700">{loginError}</p>}<button className="mt-5 min-h-12 w-full rounded-full bg-rosewood font-semibold text-white">Open reception</button></form>
+  </section>;
 
   return <section>
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-rosewood">Receptionist / staff</p><h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Staff Queue Dashboard</h1><p className="mt-2 text-charcoal/65">Today’s customers in token order.</p></div>
-      <div className="flex gap-2">
-        <button className="min-h-11 rounded-full border border-charcoal/20 px-5 py-2 font-semibold hover:bg-white" type="button" onClick={() => void loadQueue()}>Refresh</button>
-        <button className="min-h-11 rounded-full border border-charcoal/20 px-5 py-2 font-semibold hover:bg-white" type="button" onClick={() => void handleLogout()}>Sign out</button>
-      </div>
-    </div>
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-rosewood">Reception</p><h1 className="mt-3 text-3xl font-semibold sm:text-4xl">Queue Dashboard</h1><p className="mt-2 text-charcoal/65">Customers remain in token order. Calls expire to No-show after 10 minutes.</p></div><div className="flex gap-2"><button className="min-h-11 rounded-full border px-5 font-semibold" onClick={() => void loadQueue()}>Refresh</button><button className="min-h-11 rounded-full border px-5 font-semibold" onClick={() => void logout()}>Sign out</button></div></header>
+    {error && <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-800">{error}</p>}
+    {notice && <p role="status" className="mt-5 rounded-xl bg-green-50 p-4 text-sm text-green-900">{notice}</p>}
 
-    <div className="mt-7 grid gap-3 grid-cols-2 xl:grid-cols-4">
-      {counts.map(({ status, count }) => <div className="rounded-2xl border border-blush bg-white p-4 shadow-sm" key={status}><p className="text-sm text-charcoal/60">{status}</p><p className="mt-1 text-2xl font-semibold">{count}</p></div>)}
-    </div>
+    <section className="mt-7 rounded-3xl border border-blush bg-white p-5 shadow-sm sm:p-7"><h2 className="text-xl font-semibold">Barbers on duty</h2>{barbers.filter((b) => b.on_duty).length === 0 ? <p className="mt-3 rounded-xl bg-cream p-4 text-sm">No barbers are on duty today. Set availability in Owner Settings.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{barbers.filter((b) => b.on_duty).map((barber) => <article key={barber.id} className="flex items-center justify-between gap-3 rounded-2xl border border-charcoal/10 p-4"><div><h3 className="font-semibold">{barber.name}</h3><p className="mt-1 text-xs text-charcoal/60">{barber.on_break ? "On break" : "Available"} ... {entries.some((e) => e.assigned_barber_id === barber.id && e.status === "In chair") ? "Serving a customer" : "Ready for a call"}</p></div><button type="button" disabled={pending !== "" || Boolean(barber.on_break) || entries.some((e) => e.assigned_barber_id === barber.id && e.status === "In chair")} onClick={() => void callNext(barber)} className="min-h-10 rounded-full bg-rosewood px-4 text-sm font-semibold text-white disabled:opacity-45">{pending === barber.id ? "Calling..." : "Call Next"}</button></article>)}</div>}</section>
 
-    {error && <p className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-800" role="alert">{error}</p>}
-    {notice && <p className="mt-5 rounded-xl bg-green-50 p-4 text-sm text-green-900" role="status">{notice}</p>}
-    {loading ? <p className="mt-7 rounded-xl bg-white p-5 text-charcoal/70" role="status">Loading queue…</p> : (
-      <div className="mt-7 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-        {sections.map((status) => {
-          const items = entries.filter((entry) => entry.status === status);
-          return <section className="min-w-0 rounded-3xl border border-blush bg-[#fffdfa] p-4 sm:p-5" key={status}>
-            <div className="flex items-center justify-between gap-2"><h2 className="text-lg font-semibold">{status}</h2><span className="rounded-full bg-cream px-3 py-1 text-sm font-medium">{items.length}</span></div>
-            {items.length === 0 ? <p className="mt-5 rounded-2xl bg-white p-4 text-sm text-charcoal/60">{status === "Waiting" ? "No customers waiting." : "No customers in this section."}</p> : (
-              <div className="mt-4 space-y-3">
-                {items.map((entry) => <article className="rounded-2xl border border-charcoal/10 bg-white p-4 shadow-sm" key={entry.id}>
-                  <div className="flex items-start justify-between gap-2"><p className="text-2xl font-semibold tracking-tight">{formatToken(entry.token_number)}</p><span className="rounded-full bg-cream px-2.5 py-1 text-xs font-semibold">{entry.status}</span></div>
-                  <h3 className="mt-3 font-semibold">{entry.customer_name}</h3>
-                  <p className="mt-1 text-sm text-charcoal/70">{entry.service_name}</p>
-                  <dl className="mt-4 space-y-2 border-t border-charcoal/10 pt-3 text-sm">
-                    <div className="flex justify-between gap-3"><dt className="text-charcoal/55">Duration</dt><dd>{entry.service_duration_minutes} min</dd></div>
-                    <div className="flex justify-between gap-3"><dt className="text-charcoal/55">Registered</dt><dd className="text-right">{formatTime(entry.registered_at)}</dd></div>
-                  </dl>
-                  {status === "Waiting" && <div className="mt-4 grid gap-2">
-                    <button className="min-h-10 rounded-full bg-rosewood px-4 py-2 text-sm font-semibold text-white hover:bg-charcoal disabled:opacity-60" disabled={pendingId !== ""} type="button" onClick={() => void handleStatusChange(entry, "In Service")}>{pendingId === entry.id ? "Updating…" : "Start Service"}</button>
-                    <button className="min-h-10 rounded-full border border-charcoal/20 px-4 py-2 text-sm font-semibold hover:bg-cream disabled:opacity-60" disabled={pendingId !== ""} type="button" onClick={() => void handleStatusChange(entry, "Cancelled")}>{pendingId === entry.id ? "Updating…" : "Cancel Queue Entry"}</button>
-                  </div>}
-                  {status === "In Service" && <button className="mt-4 min-h-10 w-full rounded-full bg-charcoal px-4 py-2 text-sm font-semibold text-white hover:bg-rosewood disabled:opacity-60" disabled={pendingId !== ""} type="button" onClick={() => void handleStatusChange(entry, "Completed")}>{pendingId === entry.id ? "Updating…" : "Complete Service"}</button>}
-                  {status === "Cancelled" && <p className="mt-4 border-t border-charcoal/10 pt-3 text-xs text-charcoal/55">Read-only record. Cancelled tokens are retained.</p>}
-                </article>)}
-              </div>
-            )}
-          </section>;
-        })}
-      </div>
-    )}
+    <form onSubmit={walkIn} className="mt-5 rounded-3xl border border-blush bg-white p-5 shadow-sm sm:p-7"><h2 className="text-xl font-semibold">Register walk-in</h2><p className="mt-1 text-sm text-charcoal/65">Staff walk-ins are accepted even when online joining is closed.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <label className="text-sm font-medium">Customer name<input required maxLength={100} className="mt-1 min-h-11 w-full rounded-xl border border-charcoal/20 px-3" value={name} onChange={(e) => setName(e.target.value)} /></label>
+      <label className="text-sm font-medium">Phone<input required type="tel" className="mt-1 min-h-11 w-full rounded-xl border border-charcoal/20 px-3" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
+      <label className="text-sm font-medium">Service<select required className="mt-1 min-h-11 w-full rounded-xl border border-charcoal/20 bg-white px-3" value={serviceId} onChange={(e) => setServiceId(e.target.value)}><option value="">Choose service</option>{services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+      <label className="text-sm font-medium">Barber preference<select className="mt-1 min-h-11 w-full rounded-xl border border-charcoal/20 bg-white px-3" value={preferredBarberId} onChange={(e) => setPreferredBarberId(e.target.value)}><option value="">Any available barber</option>{barbers.filter((b) => b.on_duty && !b.on_break).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+    </div><button disabled={pending !== "" || !services.length} className="mt-4 min-h-11 rounded-full bg-charcoal px-6 font-semibold text-white disabled:opacity-50">{pending === "walk-in" ? "Registering..." : "Register walk-in"}</button></form>
+
+    <div className="mt-7 grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">{sections.map((section) => {
+      const list = entries.filter((entry) => entry.status === section);
+      return <section key={section} className="min-w-0 rounded-3xl border border-blush bg-[#fffdfa] p-4 sm:p-5"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">{section}</h2><span className="rounded-full bg-cream px-3 py-1 text-sm">{list.length}</span></div>
+        {!list.length ? <p className="mt-4 rounded-2xl bg-white p-4 text-sm text-charcoal/60">{section === "Waiting" ? "No customers waiting." : "No records in this section."}</p> : <div className="mt-4 space-y-3">{list.map((entry) => <article key={entry.id} className="rounded-2xl border border-charcoal/10 bg-white p-4"><div className="flex items-start justify-between gap-2"><p className="text-2xl font-semibold">{token(entry.token_number)}</p><span className="rounded-full bg-cream px-2.5 py-1 text-xs font-semibold">{entry.status}</span></div><h3 className="mt-3 font-semibold">{entry.customer_name}</h3><p className="mt-1 text-sm text-charcoal/70">{entry.service_name} ... {entry.service_duration_minutes} min</p><p className="mt-2 text-xs text-charcoal/55">Registered {time(entry.registered_at)}{entry.assigned_barber_name ? " ... " + entry.assigned_barber_name : ""}</p>
+          {section === "Waiting" && <button type="button" disabled={Boolean(pending)} onClick={() => void status(entry, "Cancelled")} className="mt-3 min-h-10 rounded-full border border-charcoal/20 px-4 text-sm font-semibold disabled:opacity-50">Cancel</button>}
+          {section === "Called" && <p className="mt-3 text-xs text-charcoal/60">Called at {entry.called_at ? time(entry.called_at) : "..."} ... marked No-show automatically after 10 minutes.</p>}
+          {section === "In chair" && <button type="button" disabled={Boolean(pending)} onClick={() => void status(entry, "Done")} className="mt-3 min-h-10 rounded-full bg-charcoal px-4 text-sm font-semibold text-white disabled:opacity-50">Mark Done</button>}
+          {(section === "Cancelled" || section === "No-show") && <p className="mt-3 border-t pt-3 text-xs text-charcoal/55">Historical record retained. Token will not be reused.</p>}
+        </article>)}</div>}
+      </section>;
+    })}</div>
+    <section className="mt-7 rounded-3xl border border-blush bg-white p-5 shadow-sm sm:p-7"><h2 className="text-xl font-semibold">Earlier cancelled and no-show records</h2>{history.length === 0 ? <p className="mt-4 rounded-2xl bg-cream p-4 text-sm text-charcoal/60">No earlier cancelled or no-show records.</p> : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{history.map((entry) => <article key={entry.id} className="rounded-2xl border border-charcoal/10 p-4"><div className="flex items-center justify-between gap-2"><p className="text-2xl font-semibold">{token(entry.token_number)}</p><span className="rounded-full bg-cream px-3 py-1 text-xs">{entry.status} ? {entry.token_date}</span></div><h3 className="mt-3 font-semibold">{entry.customer_name}</h3><p className="mt-1 text-sm text-charcoal/70">{entry.service_name} ? {entry.service_duration_minutes} min</p><p className="mt-2 text-xs text-charcoal/55">Registered {time(entry.registered_at)}</p></article>)}</div>}</section>
   </section>;
 }

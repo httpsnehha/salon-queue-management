@@ -91,7 +91,8 @@ export function createApp(db: DatabaseSync, options: AppOptions = {}) {
   const accessCode = options.staffAccessCode ?? process.env.STAFF_ACCESS_CODE ?? "";
   const sessionSecret = options.sessionSecret ?? process.env.STAFF_SESSION_SECRET ?? "";
   const sessionTtlSeconds = options.sessionTtlSeconds ?? defaultSessionTtlSeconds;
-  const allowedOrigin = process.env.FRONTEND_ORIGIN ?? "http://localhost:5173";
+  const allowedOrigins = (process.env.FRONTEND_ORIGIN ?? "http://localhost:5173")
+    .split(",").map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean);
   const secureCookie = process.env.NODE_ENV === "production";
   const sameSite = secureCookie ? "None" : "Lax";
   const notifyStatusChanged = options.onStatusChanged ?? (() => {});
@@ -103,7 +104,7 @@ export function createApp(db: DatabaseSync, options: AppOptions = {}) {
     return sessionSecret.length >= 32 && hasValidSession(request.headers.cookie, sessionSecret, now());
   }
   function requestComesFromFrontend(request: express.Request) {
-    return request.get("origin") === allowedOrigin;
+    return allowedOrigins.includes((request.get("origin") ?? "").replace(/\/$/, ""));
   }
   function requireStaff(request: express.Request, response: express.Response) {
     if (hasStaffSession(request)) return true;
@@ -120,7 +121,7 @@ export function createApp(db: DatabaseSync, options: AppOptions = {}) {
     for (const registrationId of ids) notifyStatusChanged({ registrationId, status: "No-show" });
   }
 
-  app.use(cors({ origin: allowedOrigin, credentials: true, methods: ["GET", "POST", "PATCH", "DELETE"] }));
+  app.use(cors({ origin: allowedOrigins, credentials: true, methods: ["GET", "POST", "PATCH", "DELETE"] }));
   app.use(express.json());
   app.get("/api/health", (_request, response) => response.json({ status: "ok" }));
   app.get("/api/services", (_request, response) => response.json(getServices(db)));

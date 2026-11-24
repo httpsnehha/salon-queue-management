@@ -1,3 +1,9 @@
+const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "").trim().replace(/\/+$/, "");
+
+function apiFetch(path: string, init?: RequestInit) {
+  return fetch(apiBaseUrl + path, init);
+}
+
 export type ServiceOption = {
   id: string; name: string; name_gu: string; category: string; description: string;
   price: number; duration_minutes: number; is_active: number;
@@ -54,78 +60,78 @@ function json(method: string, value?: unknown) {
   };
 }
 export async function getServices() {
-  return readResponse<ServiceOption[]>(await fetch("/api/services"));
+  return readResponse<ServiceOption[]>(await apiFetch("/api/services"));
 }
 export async function getPublicSettings() {
-  return readResponse<PublicSettings>(await fetch("/api/public/settings"));
+  return readResponse<PublicSettings>(await apiFetch("/api/public/settings"));
 }
 export async function createRegistration(input: RegistrationInput) {
-  return readResponse<RegistrationConfirmation>(await fetch("/api/registrations", {
+  return readResponse<RegistrationConfirmation>(await apiFetch("/api/registrations", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
   }));
 }
 export async function getRegistration(id: string) {
-  return readResponse<QueueRegistration>(await fetch("/api/registrations/" + encodeURIComponent(id)));
+  return readResponse<QueueRegistration>(await apiFetch("/api/registrations/" + encodeURIComponent(id)));
 }
 export async function getStaffQueue() {
-  return readResponse<{ entries: StaffQueueEntry[] }>(await fetch("/api/staff/queue", { credentials: "include" }));
+  return readResponse<{ entries: StaffQueueEntry[] }>(await apiFetch("/api/staff/queue", { credentials: "include" }));
 }
 export async function getQueueHistory() {
-  return readResponse<{ entries: QueueHistoryEntry[] }>(await fetch("/api/staff/history", { credentials: "include" }));
+  return readResponse<{ entries: QueueHistoryEntry[] }>(await apiFetch("/api/staff/history", { credentials: "include" }));
 }
 export async function createStaffSession(accessCode: string) {
-  return readResponse<{ authenticated: boolean; expiresAt: number }>(await fetch("/api/staff/session", {
+  return readResponse<{ authenticated: boolean; expiresAt: number }>(await apiFetch("/api/staff/session", {
     ...json("POST", { accessCode }),
   }));
 }
 export async function endStaffSession() {
-  return readResponse<void>(await fetch("/api/staff/session", json("DELETE")));
+  return readResponse<void>(await apiFetch("/api/staff/session", json("DELETE")));
 }
 export async function changeQueueStatus(id: string, status: QueueStatus) {
-  return readResponse<QueueUpdate>(await fetch("/api/staff/queue/" + encodeURIComponent(id) + "/status", json("PATCH", { status })));
+  return readResponse<QueueUpdate>(await apiFetch("/api/staff/queue/" + encodeURIComponent(id) + "/status", json("PATCH", { status })));
 }
 export async function callNextForBarber(barberId: string) {
   return readResponse<{ id: string; token_number: number; status: "Called"; barberId: string; barberName: string; calledAt: string }>(
-    await fetch("/api/staff/queue/call-next/" + encodeURIComponent(barberId), json("POST")),
+    await apiFetch("/api/staff/queue/call-next/" + encodeURIComponent(barberId), json("POST")),
   );
 }
 export async function createWalkIn(input: RegistrationInput) {
-  return readResponse<RegistrationConfirmation>(await fetch("/api/staff/registrations", json("POST", input)));
+  return readResponse<RegistrationConfirmation>(await apiFetch("/api/staff/registrations", json("POST", input)));
 }
 export async function getDisplayQueue() {
-  return readResponse<DisplayQueue>(await fetch("/api/display/queue"));
+  return readResponse<DisplayQueue>(await apiFetch("/api/display/queue"));
 }
 export async function getOwnerServices() {
-  return readResponse<ServiceOption[]>(await fetch("/api/staff/services", { credentials: "include" }));
+  return readResponse<ServiceOption[]>(await apiFetch("/api/staff/services", { credentials: "include" }));
 }
 export async function saveService(input: Omit<ServiceOption, "id" | "is_active">, id?: string) {
   const url = id ? "/api/staff/services/" + encodeURIComponent(id) : "/api/staff/services";
-  return readResponse<ServiceOption>(await fetch(url, json(id ? "PATCH" : "POST", input)));
+  return readResponse<ServiceOption>(await apiFetch(url, json(id ? "PATCH" : "POST", input)));
 }
 export async function setServiceActive(id: string, active: boolean) {
-  return readResponse<ServiceOption>(await fetch("/api/staff/services/" + encodeURIComponent(id) + "/active", json("PATCH", { active })));
+  return readResponse<ServiceOption>(await apiFetch("/api/staff/services/" + encodeURIComponent(id) + "/active", json("PATCH", { active })));
 }
 export async function getQueueSettings() {
-  return readResponse<QueueSettings>(await fetch("/api/staff/settings", { credentials: "include" }));
+  return readResponse<QueueSettings>(await apiFetch("/api/staff/settings", { credentials: "include" }));
 }
 export async function setOnlineQueueOpen(onlineQueueOpen: boolean) {
-  return readResponse<QueueSettings>(await fetch("/api/staff/settings/online-queue", json("PATCH", { onlineQueueOpen })));
+  return readResponse<QueueSettings>(await apiFetch("/api/staff/settings/online-queue", json("PATCH", { onlineQueueOpen })));
 }
 export async function getBarbers() {
-  return readResponse<BarberOption[]>(await fetch("/api/staff/barbers", { credentials: "include" }));
+  return readResponse<BarberOption[]>(await apiFetch("/api/staff/barbers", { credentials: "include" }));
 }
 export async function createBarber(name: string) {
-  return readResponse<BarberOption>(await fetch("/api/staff/barbers", json("POST", { name })));
+  return readResponse<BarberOption>(await apiFetch("/api/staff/barbers", json("POST", { name })));
 }
 export async function setBarberDuty(id: string, onDuty: boolean) {
-  return readResponse<BarberOption>(await fetch("/api/staff/barbers/" + encodeURIComponent(id) + "/duty", json("PATCH", { onDuty })));
+  return readResponse<BarberOption>(await apiFetch("/api/staff/barbers/" + encodeURIComponent(id) + "/duty", json("PATCH", { onDuty })));
 }
 export async function setBarberBreak(id: string, onBreak: boolean) {
-  return readResponse<BarberOption>(await fetch("/api/staff/barbers/" + encodeURIComponent(id) + "/break", json("PATCH", { onBreak })));
+  return readResponse<BarberOption>(await apiFetch("/api/staff/barbers/" + encodeURIComponent(id) + "/break", json("PATCH", { onBreak })));
 }
 export async function getQueueStatistics() {
-  return readResponse<QueueStatistics>(await fetch("/api/staff/statistics", { credentials: "include" }));
+  return readResponse<QueueStatistics>(await apiFetch("/api/staff/statistics", { credentials: "include" }));
 }
 export async function getApiHealth() {
-  return readResponse<{ status: string }>(await fetch("/api/health"));
+  return readResponse<{ status: string }>(await apiFetch("/api/health"));
 }

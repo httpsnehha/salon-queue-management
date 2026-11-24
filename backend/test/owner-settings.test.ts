@@ -224,3 +224,26 @@ test("earlier cancelled and no-show records remain available in protected histor
   const history = await (await request(url, "/api/staff/history", "GET", undefined, cookie)).json() as { entries: Array<{ id: string; status: string }> };
   assert.deepEqual(history.entries.map((item) => [item.id, item.status]), [[entry.id, "Cancelled"]]);
 });
+
+test("configured Vercel origin receives credentialed CORS and may start a staff session", async (t) => {
+  const previous = process.env.FRONTEND_ORIGIN;
+  const vercelOrigin = "https://maison-rose.vercel.app";
+  process.env.FRONTEND_ORIGIN = "http://localhost:5173," + vercelOrigin;
+  let running: Fixture;
+  try { running = await fixture(t); } finally {
+    if (previous === undefined) delete process.env.FRONTEND_ORIGIN;
+    else process.env.FRONTEND_ORIGIN = previous;
+  }
+  const preflight = await fetch(running.url + "/api/staff/session", {
+    method: "OPTIONS",
+    headers: { Origin: vercelOrigin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type" },
+  });
+  assert.equal(preflight.headers.get("access-control-allow-origin"), vercelOrigin);
+  assert.equal(preflight.headers.get("access-control-allow-credentials"), "true");
+  const loginResponse = await fetch(running.url + "/api/staff/session", {
+    method: "POST", headers: { Origin: vercelOrigin, "Content-Type": "application/json" },
+    body: JSON.stringify({ accessCode }),
+  });
+  assert.equal(loginResponse.status, 200);
+  assert.match(loginResponse.headers.get("set-cookie") ?? "", /HttpOnly/i);
+});

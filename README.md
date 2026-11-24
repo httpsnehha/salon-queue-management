@@ -1,91 +1,76 @@
 # Salon Queue Management System
 
-A responsive salon queue application built with React, Vite, TypeScript, Tailwind CSS v4, Express, Node.js built-in SQLite, and Socket.IO.
+A responsive salon queue application built with React, Vite, TypeScript, Tailwind CSS v4, Express, SQLite, and Socket.IO.
 
 ## Requirements
 
-- Node.js 26.13.1 (uses the built-in `node:sqlite` module)
-- npm
+- Node.js 26.13.1 and npm
 
-## First-time setup (PowerShell)
+## Local setup
 
-From the project root, open two terminals.
+In PowerShell from the repository root, open two terminals. Copy the environment examples once if local .env files do not already exist:
+
+    Copy-Item frontend/.env.example frontend/.env
+    Copy-Item backend/.env.example backend/.env
+
+Install dependencies:
+
+    cd frontend
+    npm install
+    cd ..\backend
+    npm install
+
+For local development, leave VITE_API_URL empty. Vite proxies /api and Socket.IO traffic to http://localhost:3001. Configure STAFF_ACCESS_CODE and a random STAFF_SESSION_SECRET of at least 32 characters in backend/.env for staff authentication.
+
+## Run locally
 
 Frontend terminal:
 
-```powershell
-cd frontend
-Copy-Item .env.example .env
-npm install
-```
+    cd frontend
+    npm run dev
 
 Backend terminal:
 
-```powershell
-cd backend
-Copy-Item .env.example .env
-npm install
-```
+    cd backend
+    npm run dev
 
-Set a private staff code and a random session secret in `backend/.env`. For example, generate a secret with PowerShell:
+## Render backend and Vercel frontend
 
-```powershell
-[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
-```
+Set this environment variable in the Vercel frontend project:
 
-Copy the generated value into `STAFF_SESSION_SECRET`; set `STAFF_ACCESS_CODE` to a value you choose. Do not commit the real `.env` files. The SQLite database is created under `backend/data` by default.
+- VITE_API_URL=https://salon-queue-management-2wt1.onrender.com
 
-## Run the application
+Set these in Render for the backend service:
 
-In the frontend terminal:
+- FRONTEND_ORIGIN: the exact origin of the deployed Vercel site (for example, https://your-project.vercel.app). Multiple exact origins may be comma-separated.
+- STAFF_ACCESS_CODE: a private staff access code.
+- STAFF_SESSION_SECRET: a random secret of at least 32 characters.
+- Keep NODE_ENV=production so the staff session cookie uses Secure and SameSite=None for cross-origin requests.
 
-```powershell
-npm run dev
-```
-
-In the backend terminal:
-
-```powershell
-npm run dev
-```
-
-Vite serves the frontend at http://localhost:5173 and proxies API and Socket.IO traffic to the backend at http://localhost:3001. Backend CORS uses `FRONTEND_ORIGIN`. `QUEUE_TIME_ZONE` defaults to `Asia/Kolkata` and can be changed in `backend/.env`.
+After setting VITE_API_URL in Vercel, redeploy the frontend because Vite embeds environment variables at build time. Staff requests send credentials, and the backend allows credentialed CORS only from configured frontend origins. Do not put backend secrets in Vercel or frontend source code.
 
 ## Routes
 
-- Customer Home and Services: `/`
-- Join Queue: `/join`
-- Customer Queue Status: `/queue/:id`
-- Reception Queue Dashboard: `/staff`
-- Live Queue Display: `/display`
-- Owner Settings: `/admin`
-- Barber View: `/barber`
-
-Management pages use the backend-configured staff access-code session. Queue registrations use daily sequential tokens. SQLite startup performs safe additive/workflow migrations while retaining historical customer and service snapshots.
+- Customer Home and Services: /
+- Join Queue: /join
+- Customer Queue Status: /queue/:id
+- Reception Queue Dashboard: /staff
+- Live Queue Display: /display
+- Owner Settings: /admin
+- Barber View: /barber
 
 ## Verify and test
 
-Health check (backend running):
+With the backend running, check its health:
 
-```powershell
-Invoke-RestMethod http://localhost:3001/api/health
-```
+    Invoke-RestMethod https://salon-queue-management-2wt1.onrender.com/api/health
 
-Run automated backend tests:
+Run the backend tests and builds:
 
-```powershell
-cd backend
-npm test
-npm run build
-```
+    cd backend
+    npm test
+    npm run build
+    cd ..\frontend
+    npm run build
 
-Build the frontend in a separate terminal:
-
-```powershell
-cd frontend
-npm run build
-```
-
-Manual checks: create an on-duty barber in Owner Settings, join online and as a staff walk-in, call the next eligible customer, start and finish the service from Barber View or Reception, verify customer status and Live Display update, try cancellation and the 10-minute no-show rule, and toggle online joining closed to check the customer explanation and continued walk-in registration.
-
-Automated build and test results are reported for the exact current revision; browser and physical TV checks are only reported when performed.
+To verify the deployed frontend, open the Vercel URL, check customer services and queue status, then sign into Staff or Owner Settings and confirm the session persists across protected requests. Browser verification must be performed against the deployed origins after the Vercel and Render environment variables are configured.

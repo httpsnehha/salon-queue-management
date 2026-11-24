@@ -87,6 +87,21 @@ test("required fields, phone, and database service selection are validated witho
   assert.equal(valid.body.token, "#001");
 });
 
+test("the registration response ID retrieves that customer's queue status", async (t) => {
+  const { url } = await fixture(t);
+  const created = await postRegistration(url, validInput);
+  assert.equal(created.response.status, 201);
+  assert.equal(typeof created.body.id, "string");
+
+  const statusResponse = await fetch(url + "/api/registrations/" + encodeURIComponent(String(created.body.id)));
+  const status = await statusResponse.json() as Record<string, unknown>;
+  assert.equal(statusResponse.status, 200);
+  assert.equal(status.id, created.body.id);
+  assert.equal(status.customer_name, validInput.customerName);
+
+  const placeholderResponse = await fetch(url + "/api/registrations/demo");
+  assert.equal(placeholderResponse.status, 404);
+});
 test("tokens are sequential and canceled tokens are not reused", async (t) => {
   const { db, url } = await fixture(t);
   const first = await postRegistration(url, validInput);

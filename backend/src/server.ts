@@ -4,13 +4,18 @@ import { createApp } from "./app.js";
 import { database } from "./database.js";
 import { configureSocketServer } from "./socket.js";
 
-const app = createApp(database);
+let broadcastStatusUpdate = (_update: { registrationId: string; status: string }) => {};
+const app = createApp(database, { onStatusChanged: (update) => broadcastStatusUpdate(update) });
 const httpServer = createServer(app);
 const io = configureSocketServer(httpServer);
 const port = Number(process.env.PORT ?? 3001);
 
+broadcastStatusUpdate = (update) => {
+  io.emit("queue:updated", update);
+};
+
 io.on("connection", () => {
-  // Queue realtime events will be added with the relevant staff and display features.
+  // Connected customer, staff, and display screens subscribe to queue:updated.
 });
 
 httpServer.listen(port, () => {

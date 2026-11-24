@@ -219,3 +219,130 @@ Test:
 Before making changes, show your implementation plan and the files you intend to modify. Wait for approval.
 
 After implementation, explain all changes and provide exact PowerShell commands to run and test the feature. Report any tests you could not perform honestly.
+
+# Prompt 5 — Staff Queue Dashboard
+
+Read AGENTS.md and all three documents inside docs/ before making changes. Inspect the existing frontend, backend, database schema, and queue registration implementation.
+
+Implement the Staff Queue Dashboard at `/staff`.
+
+## 1. Staff Dashboard UI
+
+Create a responsive dashboard using the existing blush pink, cream, and dark charcoal theme.
+
+Display queue entries in these sections:
+- Waiting
+- In Service
+- Completed
+
+Also account for Cancelled registrations according to the documented queue rules. If the documentation does not specify how cancelled entries should appear, explain your proposed approach in the implementation plan before coding.
+
+Each queue entry should display:
+- Token number
+- Customer name
+- Selected service
+- Service duration
+- Registration time
+- Current status
+
+## 2. Queue Management
+
+Allow staff to perform only these documented status transitions:
+
+- Waiting → In Service
+- Waiting → Cancelled
+- In Service → Completed
+
+Requirements:
+- Provide clear action buttons.
+- Prevent invalid status transitions.
+- Update the database when a status changes.
+- Display understandable success and error messages.
+- Prevent accidental repeated submissions.
+
+## 3. Backend
+
+Implement the required API endpoints.
+
+- Retrieve queue entries.
+- Update a customer's status.
+- Validate all status transitions on the backend.
+- Do not allow customers to update their own status.
+- Preserve existing registration and token data.
+
+## 4. Realtime updates
+
+Use the existing Socket.IO setup to notify connected screens when a queue status changes.
+
+Do not break the existing frontend API connection.
+
+## 5. Testing
+
+Test:
+- Displaying queue entries.
+- Waiting → In Service.
+- Waiting → Cancelled.
+- In Service → Completed.
+- Rejection of invalid transitions.
+- Persistence after restarting the backend.
+- Realtime notification after a status update.
+
+## Important instructions
+
+- Follow the existing React, Vite, TypeScript, Tailwind v4, Express, SQLite, and Socket.IO stack.
+- Keep the existing homepage, Join Queue, and Queue Status pages working.
+- Do not add payment functionality or unrelated features.
+- Do not change the token-generation rules.
+- Keep the implementation beginner-friendly.
+- Do not introduce authentication or additional roles unless required by the project documents.
+
+## Before implementation
+
+First provide:
+1. Your implementation plan.
+2. Files you intend to create or modify.
+3. Your proposed treatment of Cancelled registrations.
+4. The API endpoints you intend to add.
+
+Wait for approval before changing files.
+
+After implementation, provide changed files, exact run commands, and honest test results.
+
+
+
+## Prompt 6 - Investigate Staff Dashboard refresh and Customer Queue Status
+
+We have tested Prompt 5 (Staff Queue Dashboard) and the Live Queue Display.
+
+Current observations:
+
+1. The Live Queue Display at `/display` updates automatically when queue status changes.
+2. The Staff Dashboard at `/staff` does not consistently update automatically; we have to refresh it to see queue changes.
+3. The Customer Queue Status page at `/queue/demo` displays "Queue details unavailable. This queue registration could not be found."
+
+Please investigate these issues before changing code.
+
+Tasks:
+
+- Inspect the Socket.IO connection and event listeners in `StaffPage.tsx`.
+- Ensure the staff dashboard automatically refreshes its queue data when it receives the existing `queue:updated` event.
+- Check that listeners are cleaned up correctly and avoid duplicate listeners.
+- Inspect customer registration response, frontend navigation after successful registration, and `QueueStatusPage.tsx`.
+- Ensure the registration flow navigates using the actual registration ID returned by the backend, not a placeholder such as `demo`.
+- Verify the customer status API receives the correct ID and returns the corresponding registration.
+- Preserve existing styling, authentication, database logic, and status transition rules.
+- Do not introduce unrelated features or change the API contract unnecessarily.
+- Add or update tests for the identified problems.
+- Run backend tests and frontend/backend builds.
+- Explain the root cause of each issue and list all changed files.
+
+Do not claim that browser testing passed unless it was actually performed.
+
+### Outcome
+
+- Staff dashboard reconnect resync and request-version guard added.
+- Removed hard-coded `/queue/demo` navigation link.
+- Customer status navigation now uses the actual registration ID.
+- Backend tests: 15 passed.
+- Backend and frontend builds passed.
+- Browser testing subsequently confirmed the customer route, staff automatic updates, and live display automatic updates.

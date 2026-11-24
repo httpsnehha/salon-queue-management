@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getRegistration, type QueueRegistration } from "../lib/api";
+import { getRegistration, type QueueRegistration, type QueueUpdate } from "../lib/api";
+import { queueSocket } from "../lib/socket";
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(price);
@@ -26,6 +27,17 @@ export default function QueueStatusPage() {
   }, [id]);
 
   useEffect(() => { void loadRegistration(); }, [loadRegistration]);
+  useEffect(() => {
+    const handleUpdate = (update: QueueUpdate) => {
+      if (update.registrationId === id) void loadRegistration();
+    };
+    queueSocket.on("queue:updated", handleUpdate);
+    queueSocket.connect();
+    return () => {
+      queueSocket.off("queue:updated", handleUpdate);
+      queueSocket.disconnect();
+    };
+  }, [id, loadRegistration]);
 
   if (loading) return <section className="mx-auto max-w-2xl rounded-3xl border border-blush bg-white p-8 text-charcoal/70" role="status">Loading your queue details…</section>;
   if (error || !registration) return <section className="mx-auto max-w-2xl rounded-3xl border border-blush bg-white p-7 shadow-sm">

@@ -87,7 +87,7 @@ export default function JoinQueuePage() {
           <p className="mt-4 font-medium">{confirmation.serviceName}</p>
           <p className="mt-1 text-sm text-charcoal/65">{formatPrice(confirmation.servicePrice)} · {confirmation.serviceDurationMinutes} minutes</p>
         </div>
-        <Link className="mt-7 inline-flex min-h-12 items-center justify-center rounded-full bg-rosewood px-6 py-3 font-semibold text-white hover:bg-charcoal" to={"/queue/" + confirmation.id}>View your queue status</Link>
+        <Link className="mt-7 inline-flex min-h-12 items-center justify-center rounded-full bg-rosewood px-6 py-3 font-semibold text-white hover:bg-charcoal" to={"/queue/" + encodeURIComponent(confirmation.id)}>View your queue status</Link>
       </div>
     </section>;
   }

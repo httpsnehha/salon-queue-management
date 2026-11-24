@@ -2,15 +2,26 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 export type ServiceRecord = { id: string; name: string; category: string; description: string; price: number; duration_minutes: number };
+export type QueueStatus = "Waiting" | "In Service" | "Completed" | "Cancelled";
 export type RegistrationRecord = {
   id: string; customer_name: string; service_id: string;
   service_name: string; service_price: number; service_duration_minutes: number;
   token_date: string; token_number: number; status: string; registered_at: string;
   position: number | null; approximate_wait_minutes: number | null;
 };
+export type StaffQueueEntry = {
+  id: string; token_date: string; token_number: number; customer_name: string;
+  service_name: string; service_duration_minutes: number; registered_at: string; status: QueueStatus;
+};
 
 export class RegistrationError extends Error {
   constructor(message: string) { super(message); this.name = "RegistrationError"; }
+}
+export class QueueEntryNotFoundError extends Error {
+  constructor() { super("Queue entry not found."); this.name = "QueueEntryNotFoundError"; }
+}
+export class QueueTransitionError extends Error {
+  constructor(message: string) { super(message); this.name = "QueueTransitionError"; }
 }
 
 const initialServices: ServiceRecord[] = [
@@ -154,4 +165,61 @@ export function getRegistration(db: DatabaseSync, id: string): RegistrationRecor
     wait = waitRow.wait_minutes;
   }
   return { ...row, position, approximate_wait_minutes: wait };
+}
+
+export function getStaffQueue(db: DatabaseSync, now = new Date(), timeZone = process.env.QUEUE_TIME_ZONE || "Asia/Kolkata"): StaffQueueEntry[] {
+  const queueDate = getCalendarDate(now, timeZone);
+  return db.prepare(
+    "SELECT id,token_date,token_number,customer_name,service_name,service_duration_minutes,registered_at,status " +
+    "FROM queue_entries WHERE token_date=? ORDER BY token_number"
+  ).all(queueDate) as StaffQueueEntry[];
+}
+
+export function getDisplayQueue(db: DatabaseSync, now = new Date(), timeZone = process.env.QUEUE_TIME_ZONE || "Asia/Kolkata") {
+  const queueDate = getCalendarDate(now, timeZone);
+  const entries = db.prepare(
+    "SELECT id,token_number,service_name,status FROM queue_entries " +
+    "WHERE token_date=? AND status IN ('Waiting','In Service') ORDER BY token_number"
+  ).all(queueDate) as Array<{ id: string; token_number: number; service_name: string; status: "Waiting" | "In Service" }>;
+  return {
+    nowServing: entries.filter((entry) => entry.status === "In Service"),
+    upcoming: entries.filter((entry) => entry.status === "Waiting"),
+  };
+}
+
+const allowedTransitions: Record<QueueStatus, QueueStatus[]> = {
+  "Waiting": ["In Service", "Cancelled"],
+  "In Service": ["Completed"],
+  "Completed": [],
+  "Cancelled": [],
+};
+
+export function updateQueueStatus(db: DatabaseSync, id: string, nextStatus: unknown): QueueStatus {
+  const statuses: QueueStatus[] = ["Waiting", "In Service", "Completed", "Cancelled"];
+  if (typeof nextStatus !== "string" || !statuses.includes(nextStatus as QueueStatus)) {
+    throw new QueueTransitionError("Choose a valid queue status.");
+  }
+
+  const target = nextStatus as QueueStatus;
+  let transactionStarted = false;
+  try {
+    db.exec("BEGIN IMMEDIATE");
+    transactionStarted = true;
+
+    const entry = db.prepare("SELECT status FROM queue_entries WHERE id=?").get(id) as { status: QueueStatus } | undefined;
+    if (!entry) throw new QueueEntryNotFoundError();
+    if (!allowedTransitions[entry.status].includes(target)) {
+      throw new QueueTransitionError("That status change is not allowed.");
+    }
+
+    const result = db.prepare("UPDATE queue_entries SET status=? WHERE id=? AND status=?").run(target, id, entry.status);
+    if (result.changes !== 1) throw new QueueTransitionError("The queue entry changed. Refresh and try again.");
+
+    db.exec("COMMIT");
+    transactionStarted = false;
+    return target;
+  } catch (error) {
+    if (transactionStarted) db.exec("ROLLBACK");
+    throw error;
+  }
 }

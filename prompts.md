@@ -90,3 +90,47 @@ First show your implementation plan and the files you intend to create. Wait for
 After approval, implement only this setup task.
 
 Finally, list the files created and modified and explain how to run the frontend and backend.
+
+## Prompt 3 — Build Customer Home and Services page
+
+Read AGENTS.md and all three documents inside docs/ before making changes.
+
+
+
+Implement the Customer Home and Services screen at `/`.
+
+### Requirements
+
+1. Create an elegant, modern salon homepage using the existing blush pink, cream, and dark charcoal theme.
+2. Add a welcome/hero section with the salon name and a short introduction.
+3. Display salon services in attractive responsive cards.
+4. Each service card should show:
+   - Service name
+   - Short description
+   - Price
+   - Estimated duration
+   - A "Book / Join Queue" button
+5. Add a section showing the current number of waiting customers. Until the backend queue functionality exists, display clearly identified sample data rather than pretending it is live.
+6. Add a prominent "Join Queue" button that navigates to `/join`.
+7. Ensure the page works on mobile, tablet, and desktop.
+8. Keep the existing shared navigation and six routes working.
+9. Use sample service data for now. Do not implement database operations or queue registration yet.
+10. Do not add payment, reviews, shopping, or unrelated features.
+
+### Important instructions
+
+- Inspect the existing files before editing.
+- Reuse existing components and styles where appropriate.
+- Do not unnecessarily rewrite the project.
+- Keep code beginner-friendly and organized.
+- Do not break the other five routes.
+- Follow the documented project requirements.
+
+### After implementation
+
+1. List the files changed.
+2. Explain what was implemented.
+3. Give the exact command to run the frontend.
+4. Tell me how to test the homepage and its buttons.
+5. Report any errors or incomplete features honestly.
+

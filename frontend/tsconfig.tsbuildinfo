@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/applayout.tsx","./src/components/navigation.tsx","./src/lib/api.ts","./src/pages/adminpage.tsx","./src/pages/displaypage.tsx","./src/pages/homepage.tsx","./src/pages/joinqueuepage.tsx","./src/pages/queuestatuspage.tsx","./src/pages/staffpage.tsx"],"version":"5.8.3"}
